@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase';
-import { T } from '../tokens';
+import { DARK } from '../tokens';
+import { USI_LOGO_B64 } from '../logoData';
 
-export default function Login() {
-  const [email, setEmail] = useState('');
-  const [pass,  setPass]  = useState('');
-  const [err,   setErr]   = useState('');
+export default function Login({ T = DARK }) {
+  const [email,   setEmail]   = useState('');
+  const [pass,    setPass]    = useState('');
+  const [err,     setErr]     = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e) => {
@@ -14,43 +15,64 @@ export default function Login() {
     setErr(''); setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, pass);
-    } catch (e) {
-      setErr('Invalid credentials');
+    } catch {
+      setErr('Invalid email or password');
     } finally {
       setLoading(false);
     }
   };
 
+  const inp = {
+    width: '100%', background: T.inputBg || '#0d141c',
+    border: `1px solid ${T.border}`,
+    borderRadius: 4, color: T.text, fontFamily: T.font,
+    fontSize: 12, padding: '10px 12px', marginBottom: 16,
+    boxSizing: 'border-box', outline: 'none',
+  };
+
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center',
-      height: '100vh', background: T.bg, fontFamily: T.font }}>
-      <div style={{ width: 340, padding: 40, background: '#111820',
-        border: `1px solid #1e2a38`, borderRadius: 8 }}>
-        <div style={{ marginBottom: 32, textAlign: 'center' }}>
-          <div style={{ fontSize: 20, color: T.amber, fontWeight: 700, letterSpacing: 3 }}>⚓ FREIGHT OPS</div>
-          <div style={{ fontSize: 10, color: T.textDim, marginTop: 6, letterSpacing: 2 }}>
+      minHeight: '100vh', background: T.bg, fontFamily: T.font, padding: 16 }}>
+      <div style={{ width: '100%', maxWidth: 360, padding: '36px 32px',
+        background: T.card, border: `1px solid ${T.border}`, borderRadius: 10,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
+
+        {/* Logo */}
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+          <img src={USI_LOGO_B64} alt='USI'
+            style={{ width: 80, height: 62, objectFit: 'contain', marginBottom: 12 }} />
+          <div style={{ fontSize: 16, color: T.amber, fontWeight: 700,
+            letterSpacing: 3, fontFamily: T.font }}>FREIGHT OPS</div>
+          <div style={{ fontSize: 9, color: T.textDim, marginTop: 4,
+            letterSpacing: 2, fontFamily: T.font }}>
             PT USI PETROTRANS — OPERATIONAL SYSTEM
           </div>
         </div>
+
         <form onSubmit={handleLogin}>
           <label style={{ display: 'block', fontSize: 9, color: T.textDim,
-            letterSpacing: 1.5, marginBottom: 6 }}>EMAIL</label>
+            letterSpacing: 1.5, marginBottom: 6, fontFamily: T.font }}>EMAIL</label>
           <input type='email' value={email} onChange={e => setEmail(e.target.value)}
-            style={{ width: '100%', background: '#0d141c', border: '1px solid #1e2a38',
-              borderRadius: 4, color: '#e2e8f0', fontFamily: T.font, fontSize: 12,
-              padding: '10px 12px', marginBottom: 16, boxSizing: 'border-box', outline: 'none' }} />
+            autoComplete='email' style={inp} />
+
           <label style={{ display: 'block', fontSize: 9, color: T.textDim,
-            letterSpacing: 1.5, marginBottom: 6 }}>PASSWORD</label>
+            letterSpacing: 1.5, marginBottom: 6, fontFamily: T.font }}>PASSWORD</label>
           <input type='password' value={pass} onChange={e => setPass(e.target.value)}
-            style={{ width: '100%', background: '#0d141c', border: '1px solid #1e2a38',
-              borderRadius: 4, color: '#e2e8f0', fontFamily: T.font, fontSize: 12,
-              padding: '10px 12px', marginBottom: 24, boxSizing: 'border-box', outline: 'none' }} />
-          {err && <div style={{ color: '#f87171', fontSize: 11, marginBottom: 16 }}>{err}</div>}
+            autoComplete='current-password' style={{ ...inp, marginBottom: 24 }} />
+
+          {err && (
+            <div style={{ color: T.red, fontSize: 11, marginBottom: 16,
+              background: `${T.red}18`, borderRadius: 4, padding: '8px 12px' }}>
+              {err}
+            </div>
+          )}
+
           <button type='submit' disabled={loading}
-            style={{ width: '100%', background: T.amber, border: 'none', borderRadius: 4,
-              color: '#000', cursor: loading ? 'not-allowed' : 'pointer', fontFamily: T.font,
-              fontSize: 11, fontWeight: 700, letterSpacing: 2, padding: '12px 0',
-              opacity: loading ? 0.6 : 1 }}>
+            style={{ width: '100%', background: T.amber, border: 'none',
+              borderRadius: 4, color: '#fff', cursor: loading ? 'not-allowed' : 'pointer',
+              fontFamily: T.font, fontSize: 11, fontWeight: 700,
+              letterSpacing: 2, padding: '12px 0', opacity: loading ? 0.6 : 1,
+              transition: 'opacity 0.2s' }}>
             {loading ? 'SIGNING IN…' : 'SIGN IN'}
           </button>
         </form>
