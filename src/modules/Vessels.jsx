@@ -3,6 +3,20 @@ import { T, s } from '../tokens';
 import { Hdr, Btn, Badge, Modal, Inp, Sel, SectionLabel, Divider } from '../components/UI';
 import { uid, idr0, DEFAULT_VESSEL_MAINTENANCE, calcMaintenanceAnnual } from '../utils';
 import * as XLSX from 'xlsx';
+import { VESSEL_TEMPLATE_B64 } from '../templateData';
+
+function downloadTemplate() {
+  const binary = atob(VESSEL_TEMPLATE_B64);
+  const bytes  = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'FreightOps_Vessel_Import_Template.xlsx';
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 const DEF_FORM = {
   name: '', imoNumber: '', builtYear: '', flag: 'Indonesia',
@@ -155,6 +169,7 @@ export default function Vessels({ db, updateDB }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
         <Hdr>⛴ VESSELS — PT USI Petrotrans Samudra</Hdr>
         <div style={{ display: 'flex', gap: 8 }}>
+          <Btn variant='ghost' onClick={downloadTemplate} style={{ fontSize: 10 }}>↓ Template</Btn>
           <Btn variant='ghost' onClick={() => importRef.current?.click()}>↑ Import Excel</Btn>
           <input ref={importRef} type='file' accept='.xlsx' onChange={handleImportFile} style={{ display:'none' }} />
           <Btn onClick={openNew}>+ Add Vessel</Btn>

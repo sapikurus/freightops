@@ -3,6 +3,20 @@ import { T, s } from '../tokens';
 import { Hdr, Btn, Modal, Inp, Sel, SectionLabel } from '../components/UI';
 import * as XLSX from 'xlsx';
 import { uid, idr0, DEFAULT_TRUCK_MAINTENANCE, calcMaintenanceAnnual } from '../utils';
+import { TRUCK_TEMPLATE_B64 } from '../templateData';
+
+function downloadTemplate() {
+  const binary = atob(TRUCK_TEMPLATE_B64);
+  const bytes  = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'FreightOps_Truck_Import_Template.xlsx';
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 const DEF_FORM = {
   licensePlate: '', brand: '', truckType: '', builtYear: '',
@@ -133,6 +147,7 @@ export default function Trucks({ db, updateDB }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
         <Hdr>🚛 TRUCKS — PT USI Petrotrans Energi</Hdr>
         <div style={{ display: 'flex', gap: 8 }}>
+          <Btn variant='ghost' onClick={downloadTemplate} style={{ fontSize: 10 }}>↓ Template</Btn>
           <Btn variant='ghost' onClick={() => importRef.current?.click()}>↑ Import Excel</Btn>
           <input ref={importRef} type='file' accept='.xlsx' onChange={handleImportFile} style={{ display:'none' }} />
           <Btn onClick={openNew}>+ Add Truck</Btn>
