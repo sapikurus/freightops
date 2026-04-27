@@ -1,0 +1,311 @@
+import { useState } from 'react';
+import { T, s } from '../tokens';
+import { Hdr, Btn, Sel, Inp, SectionLabel, StatBox } from '../components/UI';
+import { calcOAT, idr0, idr2, uid, todayStr } from '../utils';
+
+function Row({ label, value, color, bold, indent }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      padding: '5px 0', borderBottom: `1px solid ${T.border}22` }}>
+      <span style={{ fontSize: 11, color: T.textDim, paddingLeft: indent ? 16 : 0 }}>{label}</span>
+      <span style={{ fontSize: 11, color: color || T.text, fontWeight: bold ? 700 : 400,
+        fontFamily: T.font }}>{value}</span>
+    </div>
+  );
+}
+
+function ScenarioCol({ label, result, color, params, isSea }) {
+  if (!result) return <div style={{ flex: 1 }} />;
+  return (
+    <div style={{ flex: 1, ...s.card, marginBottom: 0, borderColor: `${color}44` }}>
+      <div style={{ fontSize: 9, color, letterSpacing: 2, fontFamily: T.font, marginBottom: 12, fontWeight: 700 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 9, color: T.textDim, marginBottom: 8 }}>
+        Op. days: <strong style={{ color }}>{result.effectiveDays}</strong> ·
+        Trips/yr: <strong style={{ color }}>{result.tripsPerYear}</strong>
+        {isSea && <> · RPM: <strong style={{ color }}>{params.rpmKey}</strong></>}
+      </div>
+      <div style={{ fontSize: 9, color: T.textDim, marginBottom: 12 }}>
+        Maint × {params.maintMultiplier.toFixed(1)}
+      </div>
+      <div style={{ fontSize: 9, color: T.textDim }}>OAT/L</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color, fontFamily: T.font, marginBottom: 4 }}>
+        Rp {idr0(result.oatPerL)}
+      </div>
+      <div style={{ fontSize: 10, color: T.textDim }}>IDR/KL: Rp {idr0(result.oatPerKL)}</div>
+    </div>
+  );
+}
+
+export default function Calculator({ db, updateDB }) {
+  const vessels = db.vessels || [];
+  const trucks  = db.trucks  || [];
+  const routes  = db.routes  || [];
+
+  const [assetType, setAssetType] = useState('vessel');
+  const [assetId,   setAssetId]   = useState('');
+  const [routeId,   setRouteId]   = useState('');
+  const [fuelPrice, setFuelPrice] = useState(db.settings?.bunkerPrice || '');
+  const [result,    setResult]    = useState(null);
+
+  // Scenario sliders
+  const [opDaysOffset,    setOpDaysOffset]    = useState(0);
+  const [maintMultiplier, setMaintMultiplier] = useState(1.0);
+  const [rpmKey,          setRpmKey]          = useState('standard');
+
+  const assets = assetType === 'vessel' ? vessels : trucks;
+  const asset  = assets.find(a => a.id === assetId);
+  const route  = routes.find(r => r.id === routeId);
+
+  // Filter routes by type
+  const compatRoutes = routes.filter(r =>
+    assetType === 'vessel' ? r.type === 'sea' : r.type === 'land'
+  );
+
+  const isSea = assetType === 'vessel';
+
+  const calculate = () => {
+    if (!asset || !route || !fuelPrice) {
+      alert('Please select an asset, route, and enter fuel/bunker price'); return;
+    }
+    const params = {
+      fuelPricePerLiter: +fuelPrice,
+      opDaysOffset:    +opDaysOffset,
+      maintMultiplier: +maintMultiplier,
+      rpmKey,
+    };
+    setResult(calcOAT(asset, route, params));
+  };
+
+  // Scenario results
+  const conservativeResult = asset && route && fuelPrice ? calcOAT(asset, route, {
+    fuelPricePerLiter: +fuelPrice,
+    opDaysOffset: -15,
+    maintMultiplier: 1.3,
+    rpmKey: 'standard',
+  }) : null;
+
+  const standardResult = asset && route && fuelPrice ? calcOAT(asset, route, {
+    fuelPricePerLiter: +fuelPrice,
+    opDaysOffset: 0,
+    maintMultiplier: 1.0,
+    rpmKey: 'standard',
+  }) : null;
+
+  const aggressiveResult = asset && route && fuelPrice ? calcOAT(asset, route, {
+    fuelPricePerLiter: +fuelPrice,
+    opDaysOffset: +15,
+    maintMultiplier: 0.8,
+    rpmKey: isSea ? 'high' : 'standard',
+  }) : null;
+
+  const saveCalc = () => {
+    if (!result) return;
+    const snap = {
+      id: uid(),
+      savedAt: todayStr(),
+      assetName: asset?.name || asset?.licensePlate,
+      routeName: route?.name,
+      fuelPrice: +fuelPrice,
+      opDaysOffset: +opDaysOffset,
+      maintMultiplier: +maintMultiplier,
+      rpmKey,
+      result,
+    };
+    updateDB(d => ({ ...d, calculations: [...(d.calculations || []), snap] }));
+    alert(`✅ Calculation saved: ${snap.assetName} × ${snap.routeName}`);
+  };
+
+  return (
+    <div>
+      <Hdr>∑ OAT CALCULATOR</Hdr>
+
+      {/* Inputs */}
+      <div style={{ ...s.card }}>
+        <SectionLabel>SELECT ASSET & ROUTE</SectionLabel>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Sel label='Asset Type' value={assetType} onChange={v => { setAssetType(v); setAssetId(''); setRouteId(''); setResult(null); }}>
+            <option value='vessel'>⛴ Vessel (Sea)</option>
+            <option value='truck'>🚛 Truck (Land)</option>
+          </Sel>
+          <Sel label='Asset' value={assetId} onChange={v => { setAssetId(v); setResult(null); }}>
+            <option value=''>— Select {assetType} —</option>
+            {assets.map(a => <option key={a.id} value={a.id}>{a.name || a.licensePlate} ({a.capacityKL} KL)</option>)}
+          </Sel>
+          <Sel label={`Route (${isSea ? 'Sea' : 'Land'} only)`} value={routeId} onChange={v => { setRouteId(v); setResult(null); }}>
+            <option value=''>— Select route —</option>
+            {compatRoutes.map(r => <option key={r.id} value={r.id}>{r.name} ({r.origin} → {r.destination})</option>)}
+          </Sel>
+          <Inp label={isSea ? 'Bunker Price (IDR/Liter)' : 'Diesel Price (IDR/Liter)'}
+            type='number' value={fuelPrice} onChange={v => { setFuelPrice(v); setResult(null); }} />
+        </div>
+
+        {/* Scenario sliders */}
+        <SectionLabel>SCENARIO PARAMETERS (adjust to explore scenarios)</SectionLabel>
+        <div style={{ display: 'grid', gridTemplateColumns: isSea ? '1fr 1fr 1fr' : '1fr 1fr', gap: 16 }}>
+          <div>
+            <label style={s.label}>OP. DAYS OFFSET: {opDaysOffset > 0 ? '+' : ''}{opDaysOffset} days</label>
+            <input type='range' min='-30' max='30' step='1' value={opDaysOffset}
+              onChange={e => { setOpDaysOffset(+e.target.value); setResult(null); }}
+              style={{ width: '100%', accentColor: T.amber }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: T.textDim }}>
+              <span>−30 (conservative)</span><span>+30 (aggressive)</span>
+            </div>
+          </div>
+          <div>
+            <label style={s.label}>MAINT. COST MULTIPLIER: {maintMultiplier.toFixed(1)}×</label>
+            <input type='range' min='0.5' max='1.5' step='0.1' value={maintMultiplier}
+              onChange={e => { setMaintMultiplier(+e.target.value); setResult(null); }}
+              style={{ width: '100%', accentColor: T.amber }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: T.textDim }}>
+              <span>0.5× (optimistic)</span><span>1.5× (conservative)</span>
+            </div>
+          </div>
+          {isSea && (
+            <div>
+              <label style={s.label}>RPM SETTING</label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {['low','standard','high'].map(k => (
+                  <button key={k} onClick={() => { setRpmKey(k); setResult(null); }}
+                    style={{ ...s.btn('ghost'), flex: 1, padding: '6px 4px',
+                      borderColor: rpmKey === k ? T.amber : T.border,
+                      color: rpmKey === k ? T.amber : T.textDim }}>
+                    {k.toUpperCase()}
+                    <div style={{ fontSize: 8, color: T.textDim, marginTop: 2 }}>
+                      ×{asset?.rpmCoefficients?.[k] ?? (k==='standard'?1.0:k==='low'?0.75:1.3)}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+          <Btn onClick={calculate}>Calculate OAT</Btn>
+          {result && <Btn variant='ghost' onClick={saveCalc}>💾 Save Snapshot</Btn>}
+        </div>
+      </div>
+
+      {/* Result */}
+      {result && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+          <div>
+            {/* Annual Ops */}
+            <div style={s.card}>
+              <SectionLabel>ANNUAL OPERATIONS</SectionLabel>
+              <Row label='Calendar Days' value='365 days' />
+              <Row label='Maintenance / Docking Days' value={`−${365 - result.effectiveDays} days`} color={T.red} indent />
+              <Row label='Effective Operational Days' value={`${result.effectiveDays} days`} bold color={T.amber} />
+              <Row label='Voyage Time' value={`${result.voyageHours.toFixed(1)} hrs/trip`} />
+              <Row label='Trips per Year' value={`${result.tripsPerYear} trips`} bold />
+              <Row label='Annual Volume' value={`${idr0(result.annualVolumeKL)} KL`} bold color={T.green} />
+            </div>
+
+            {/* Fixed costs */}
+            <div style={s.card}>
+              <SectionLabel>FIXED COSTS (ANNUAL)</SectionLabel>
+              <Row label='Depreciation' value={`Rp ${idr0(result.depreciation)}`} indent />
+              <Row label='Crew / Driver Salary' value={`Rp ${idr0(result.salaryAnnual)}`} indent />
+              <Row label='Insurance' value={`Rp ${idr0(result.insurance)}`} indent />
+              <Row label='Maintenance Reserve' value={`Rp ${idr0(result.maintCost)}`} indent />
+              <Row label='Repair Buffer' value={`Rp ${idr0(result.repairBuffer)}`} indent />
+              <Row label='TOTAL FIXED' value={`Rp ${idr0(result.totalFixed)}`} bold color={T.amber} />
+            </div>
+          </div>
+
+          <div>
+            {/* Operating costs */}
+            <div style={s.card}>
+              <SectionLabel>OPERATING COSTS (PER TRIP × {result.tripsPerYear} TRIPS)</SectionLabel>
+              <Row label='Fuel / Bunker per trip' value={`Rp ${idr0(result.fuelCostPerTrip)}`} indent />
+              <Row label='Crew / Driver Premi' value={`Rp ${idr0(result.premi)}`} indent />
+              <Row label={isSea ? 'Port Fees' : 'Toll Fees'} value={`Rp ${idr0(result.portOrToll)}`} indent />
+              <Row label='Informal Route Fees' value={`Rp ${idr0(result.informalFees)}`} indent />
+              <Row label='Other Fees' value={`Rp ${idr0(result.otherFees)}`} indent />
+              <Row label='Per Trip Subtotal' value={`Rp ${idr0(result.opPerTrip)}`} bold />
+              <Row label='TOTAL OPERATING' value={`Rp ${idr0(result.totalOperating)}`} bold color={T.blue} />
+            </div>
+
+            {/* OAT result */}
+            <div style={{ ...s.card, borderColor: `${T.amber}66`, background: '#0d1810' }}>
+              <SectionLabel>TOTAL ANNUAL COST</SectionLabel>
+              <Row label='Fixed + Operating' value={`Rp ${idr0(result.totalAnnualCost)}`} bold color={T.text} />
+              <div style={{ borderTop: `2px solid ${T.amber}44`, marginTop: 12, paddingTop: 12 }}>
+                <div style={{ fontSize: 9, color: T.textDim, letterSpacing: 2, marginBottom: 8 }}>OAT RESULT</div>
+                <div style={{ display: 'flex', gap: 16 }}>
+                  <div>
+                    <div style={{ fontSize: 9, color: T.textDim }}>IDR / Liter</div>
+                    <div style={{ fontSize: 28, fontWeight: 700, color: T.amber, fontFamily: T.font }}>
+                      Rp {idr0(result.oatPerL)}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 9, color: T.textDim }}>IDR / KL</div>
+                    <div style={{ fontSize: 28, fontWeight: 700, color: T.amber, fontFamily: T.font }}>
+                      Rp {idr0(result.oatPerKL)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Scenarios comparison */}
+      {(conservativeResult || standardResult || aggressiveResult) && (
+        <div style={s.card}>
+          <SectionLabel>SCENARIO COMPARISON</SectionLabel>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            <ScenarioCol label='CONSERVATIVE' result={conservativeResult} color={T.red}
+              params={{ opDaysOffset: -15, maintMultiplier: 1.3, rpmKey: 'standard' }} isSea={isSea} />
+            <ScenarioCol label='STANDARD' result={standardResult} color={T.amber}
+              params={{ opDaysOffset: 0, maintMultiplier: 1.0, rpmKey: 'standard' }} isSea={isSea} />
+            <ScenarioCol label='AGGRESSIVE' result={aggressiveResult} color={T.green}
+              params={{ opDaysOffset: 15, maintMultiplier: 0.8, rpmKey: isSea ? 'high' : 'standard' }} isSea={isSea} />
+          </div>
+          <div style={{ fontSize: 10, color: T.textDim, marginTop: 12 }}>
+            Conservative: −15 op days, ×1.3 maint {isSea ? ', std RPM' : ''} ·
+            Aggressive: +15 op days, ×0.8 maint {isSea ? ', high RPM' : ''}
+          </div>
+        </div>
+      )}
+
+      {/* Saved calculations */}
+      {(db.calculations || []).length > 0 && (
+        <div style={{ marginTop: 24 }}>
+          <SectionLabel>SAVED CALCULATIONS</SectionLabel>
+          <div style={{ ...s.card, padding: 0, overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr>
+                {['Date','Asset','Route','Fuel (IDR/L)','Trips/yr','OAT/L','OAT/KL',''].map(h =>
+                  <th key={h} style={s.th}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {[...(db.calculations||[])].reverse().map(c => (
+                  <tr key={c.id}>
+                    <td style={{ ...s.td, fontSize: 10, color: T.textDim }}>{c.savedAt}</td>
+                    <td style={{ ...s.td, fontWeight: 700 }}>{c.assetName}</td>
+                    <td style={s.td}>{c.routeName}</td>
+                    <td style={s.tdNum}>Rp {idr0(c.fuelPrice)}</td>
+                    <td style={s.tdNum}>{c.result?.tripsPerYear}</td>
+                    <td style={{ ...s.tdNum, color: T.amber, fontWeight: 700 }}>Rp {idr0(c.result?.oatPerL)}</td>
+                    <td style={{ ...s.tdNum, color: T.amber }}>Rp {idr0(c.result?.oatPerKL)}</td>
+                    <td style={s.td}>
+                      <Btn variant='ghost' onClick={() => {
+                        if (!confirm('Delete this saved calculation?')) return;
+                        updateDB(d => ({ ...d, calculations: d.calculations.filter(x => x.id !== c.id) }));
+                      }} style={{ padding: '3px 10px', color: T.red }}>Del</Btn>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
