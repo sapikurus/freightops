@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { T, s } from '../tokens';
 import { Hdr, Btn, Sel, Inp, SectionLabel, StatBox } from '../components/UI';
 import { calcOAT, idr0, idr2, uid, todayStr } from '../utils';
+import { nextRouteCode } from './Routes';
 
 function Row({ label, value, color, bold, indent }) {
   return (
@@ -45,9 +46,19 @@ export default function Calculator({ db, updateDB }) {
 
   const [assetType, setAssetType] = useState('vessel');
   const [assetId,   setAssetId]   = useState('');
+  const [routeMode, setRouteMode] = useState('saved'); // 'saved' | 'direct'
   const [routeId,   setRouteId]   = useState('');
   const [fuelPrice, setFuelPrice] = useState(db.settings?.bunkerPrice || '');
   const [result,    setResult]    = useState(null);
+
+  // Direct route entry state
+  const [directRoute, setDirectRoute] = useState({
+    type: 'sea', distanceNM: '', speedKnots: 8,
+    loadingHours: 4, unloadingHours: 4, portWaitingHours: 2,
+    portFeeOrigin: 0, portFeeDestination: 0, otherFees: 0,
+    distanceKm: '', restHours: 0, tollFees: 0, informalFees: 0,
+  });
+  const sdr = (k, v) => setDirectRoute(r => ({ ...r, [k]: v }));
 
   // Scenario sliders
   const [opDaysOffset,    setOpDaysOffset]    = useState(0);
@@ -56,7 +67,9 @@ export default function Calculator({ db, updateDB }) {
 
   const assets = assetType === 'vessel' ? vessels : trucks;
   const asset  = assets.find(a => a.id === assetId);
-  const route  = routes.find(r => r.id === routeId);
+  const route  = routeMode === 'saved'
+    ? routes.find(r => r.id === routeId)
+    : { ...directRoute, type: assetType === 'vessel' ? 'sea' : 'land' };
 
   // Filter routes by type
   const compatRoutes = routes.filter(r =>
@@ -66,8 +79,15 @@ export default function Calculator({ db, updateDB }) {
   const isSea = assetType === 'vessel';
 
   const calculate = () => {
-    if (!asset || !route || !fuelPrice) {
-      alert('Please select an asset, route, and enter fuel/bunker price'); return;
+    if (!asset || !fuelPrice) {
+      alert('Please select an asset and enter fuel/bunker price'); return;
+    }
+    if (routeMode === 'saved' && !route) {
+      alert('Please select a saved route'); return;
+    }
+    if (routeMode === 'direct') {
+      const dist = isSea ? directRoute.distanceNM : directRoute.distanceKm;
+      if (!dist || +dist <= 0) { alert('Please enter distance'); return; }
     }
     const params = {
       fuelPricePerLiter: +fuelPrice,
@@ -133,10 +153,82 @@ export default function Calculator({ db, updateDB }) {
             <option value=''>— Select {assetType} —</option>
             {assets.map(a => <option key={a.id} value={a.id}>{a.name || a.licensePlate} ({a.capacityKL} KL)</option>)}
           </Sel>
-          <Sel label={`Route (${isSea ? 'Sea' : 'Land'} only)`} value={routeId} onChange={v => { setRouteId(v); setResult(null); }}>
-            <option value=''>— Select route —</option>
-            {compatRoutes.map(r => <option key={r.id} value={r.id}>{r.name} ({r.origin} → {r.destination})</option>)}
+          <Sel label={`Route (${isSea ? 'Sea' : 'Land'} only)`} value={assetId} onChange={v => { setAssetId(v); setResult(null); }}>
+            <option value=''>— Select {assetType} —</option>
+            {assets.map(a => <option key={a.id} value={a.id}>{a.name || a.licensePlate} ({a.capacityKL} KL)</option>)}
           </Sel>
+
+          {/* Route mode toggle */}
+          <div style={{ gridColumn: '1 / -1' }}>
+            <label style={s.label}>ROUTE INPUT MODE</label>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              {[['saved','📍 Use Saved Route'],['direct','✏️ Enter Directly']].map(([k,l]) => (
+                <button key={k} onClick={() => { setRouteMode(k); setResult(null); }}
+                  style={{ ...s.btn('ghost'), flex: 1,
+                    borderColor: routeMode === k ? T.amber : T.border,
+                    color: routeMode === k ? T.amber : T.textDim }}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {routeMode === 'saved' ? (
+            <Sel label={`Saved Route (${isSea ? 'Sea' : 'Land'} only)`} value={routeId} onChange={v => { setRouteId(v); setResult(null); }}>
+              <option value=''>— Select route —</option>
+              {compatRoutes.map(r => (
+                <option key={r.id} value={r.id}>
+                  {r.routeCode ? `[${r.routeCode}] ` : ''}{r.name} ({r.origin} → {r.destination})
+                </option>
+              ))}
+            </Sel>
+          ) : (
+            <div style={{ gridColumn: '1 / -1', ...s.card, padding: 16, marginBottom: 0 }}>
+              <SectionLabel>DIRECT ROUTE PARAMETERS</SectionLabel>
+              {isSea ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                  <Inp label='Distance (NM, one way)' type='number' value={directRoute.distanceNM} onChange={v => { sdr('distanceNM',v); setResult(null); }} />
+                  <Inp label='Speed (knots, std RPM)' type='number' value={directRoute.speedKnots} onChange={v => { sdr('speedKnots',v); setResult(null); }} />
+                  <Inp label='Loading (hours)' type='number' value={directRoute.loadingHours} onChange={v => { sdr('loadingHours',v); setResult(null); }} />
+                  <Inp label='Unloading (hours)' type='number' value={directRoute.unloadingHours} onChange={v => { sdr('unloadingHours',v); setResult(null); }} />
+                  <Inp label='Port Waiting (hours)' type='number' value={directRoute.portWaitingHours} onChange={v => { sdr('portWaitingHours',v); setResult(null); }} />
+                  <Inp label='Port Fee Origin (IDR/trip)' type='number' value={directRoute.portFeeOrigin} onChange={v => { sdr('portFeeOrigin',v); setResult(null); }} />
+                  <Inp label='Port Fee Dest (IDR/trip)' type='number' value={directRoute.portFeeDestination} onChange={v => { sdr('portFeeDestination',v); setResult(null); }} />
+                  <Inp label='Other Fees (IDR/trip)' type='number' value={directRoute.otherFees} onChange={v => { sdr('otherFees',v); setResult(null); }} />
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                  <Inp label='Distance (km, one way)' type='number' value={directRoute.distanceKm} onChange={v => { sdr('distanceKm',v); setResult(null); }} />
+                  <div style={{ ...s.card, padding: '10px 12px', marginBottom: 0, background: '#0d1c14' }}>
+                    <div style={{ fontSize: 10, color: T.green }}>SPEED FIXED 30 KM/H</div>
+                  </div>
+                  <Inp label='Loading (hours)' type='number' value={directRoute.loadingHours} onChange={v => { sdr('loadingHours',v); setResult(null); }} />
+                  <Inp label='Unloading (hours)' type='number' value={directRoute.unloadingHours} onChange={v => { sdr('unloadingHours',v); setResult(null); }} />
+                  <Inp label='Rest/Break (hours)' type='number' value={directRoute.restHours} onChange={v => { sdr('restHours',v); setResult(null); }} />
+                  <Inp label='Toll Fees (IDR/trip)' type='number' value={directRoute.tollFees} onChange={v => { sdr('tollFees',v); setResult(null); }} />
+                  <Inp label='Informal Fees (IDR/trip)' type='number' value={directRoute.informalFees} onChange={v => { sdr('informalFees',v); setResult(null); }} />
+                  <Inp label='Other Fees (IDR/trip)' type='number' value={directRoute.otherFees} onChange={v => { sdr('otherFees',v); setResult(null); }} />
+                </div>
+              )}
+              <button onClick={() => {
+                // Save direct route to saved routes
+                if (!window.confirm('Save this as a named route?')) return;
+                const name = window.prompt('Route name (or leave blank for auto):') || '';
+                updateDB(d => ({
+                  ...d, routes: [...d.routes, {
+                    ...directRoute,
+                    type: isSea ? 'sea' : 'land',
+                    id: Math.random().toString(36).slice(2,9)+Date.now().toString(36),
+                    routeCode: nextRouteCode(d.routes, isSea ? 'sea' : 'land'),
+                    name: name || `${directRoute.origin||'–'} → ${directRoute.destination||'–'}`,
+                    origin: '', destination: '',
+                  }]
+                }));
+              }} style={{ ...s.btn('ghost'), marginTop: 12, fontSize: 10 }}>
+                💾 Save as Named Route
+              </button>
+            </div>
+          )}
           <Inp label={isSea ? 'Bunker Price (IDR/Liter)' : 'Diesel Price (IDR/Liter)'}
             type='number' value={fuelPrice} onChange={v => { setFuelPrice(v); setResult(null); }} />
         </div>

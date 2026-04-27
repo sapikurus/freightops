@@ -3,6 +3,17 @@ import { T, s } from '../tokens';
 import { Hdr, Btn, Modal, Inp, Sel, SectionLabel, Badge } from '../components/UI';
 import { uid, idr0 } from '../utils';
 
+// Auto-generate route code: R-SEA-001, R-LT-001
+export function nextRouteCode(routes, type) {
+  const prefix = type === 'sea' ? 'R-SEA-' : 'R-LT-';
+  const existing = (routes || [])
+    .filter(r => r.type === type && r.routeCode?.startsWith(prefix))
+    .map(r => parseInt(r.routeCode.replace(prefix, ''), 10))
+    .filter(n => !isNaN(n));
+  const next = existing.length > 0 ? Math.max(...existing) + 1 : 1;
+  return prefix + String(next).padStart(3, '0');
+}
+
 const DEF_SEA = {
   type: 'sea', name: '', origin: '', destination: '',
   distanceNM: '', speedKnots: 8,
@@ -27,17 +38,27 @@ export default function Routes({ db, updateDB }) {
 
   const routes = db.routes || [];
 
-  const openNew  = (type) => { setForm(type === 'sea' ? { ...DEF_SEA } : { ...DEF_LAND }); setModal('new'); };
+  const openNew  = (type) => {
+    const routeCode = nextRouteCode(routes, type);
+    setForm(type === 'sea'
+      ? { ...DEF_SEA, routeCode }
+      : { ...DEF_LAND, routeCode });
+    setModal('new');
+  };
   const openEdit = (r) => { setForm({ ...r }); setModal('edit'); };
   const del      = (id) => { if (!confirm('Delete route?')) return; updateDB(d => ({ ...d, routes: d.routes.filter(r => r.id !== id) })); };
 
   const save = () => {
-    if (!form.name?.trim()) { alert('Route name required'); return; }
+    if (!form.routeCode?.trim()) { alert('Route code required'); return; }
     const isEdit = modal === 'edit';
     const numFields = form.type === 'sea'
       ? ['distanceNM','speedKnots','loadingHours','unloadingHours','portWaitingHours','portFeeOrigin','portFeeDestination','otherFees']
       : ['distanceKm','loadingHours','unloadingHours','restHours','tollFees','informalFees','otherFees'];
     const record = { ...form };
+    // Auto-fill name if blank
+    if (!record.name?.trim() && record.origin && record.destination) {
+      record.name = `${record.origin} → ${record.destination}`;
+    }
     numFields.forEach(k => { record[k] = +form[k] || 0; });
     if (!isEdit) record.id = uid();
     updateDB(d => ({
@@ -84,7 +105,7 @@ export default function Routes({ db, updateDB }) {
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>
-                {['','Route Name','Origin → Dest','Distance','Voyage Time (est.)','Per-Trip Fees',''].map(h =>
+                {['','Code','Route Name','Origin → Dest','Distance','Voyage Time (est.)','Per-Trip Fees',''].map(h =>
                   <th key={h} style={s.th}>{h}</th>)}
               </tr></thead>
               <tbody>
@@ -98,8 +119,11 @@ export default function Routes({ db, updateDB }) {
                     : (+r.tollFees || 0) + (+r.informalFees || 0) + (+r.otherFees || 0);
                   return (
                     <tr key={r.id}>
-                      <td style={s.td}>
+                      <td style={{ ...s.td }}>
                         <Badge color={isSea ? T.amber : T.teal}>{isSea ? 'SEA' : 'LAND'}</Badge>
+                      </td>
+                      <td style={{ ...s.td, fontFamily: T.font, fontSize: 10, color: T.amber }}>
+                        {r.routeCode || '–'}
                       </td>
                       <td style={{ ...s.td, fontWeight: 700 }}>{r.name}</td>
                       <td style={{ ...s.td, color: T.textDim, fontSize: 11 }}>{r.origin} → {r.destination}</td>
@@ -125,7 +149,15 @@ export default function Routes({ db, updateDB }) {
         <Modal title={`${modal === 'edit' ? 'Edit' : 'New'} ${form.type === 'sea' ? 'Sea' : 'Land'} Route`}
           onClose={() => setModal(null)} width={540}>
 
-          <Inp label='Route Name' value={form.name} onChange={v => sf('name', v)} placeholder='e.g. Samarinda → JMSE' />
+          <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 12, marginBottom: 4 }}>
+            <div>
+              <label style={s.label}>ROUTE CODE (AUTO)</label>
+              <input value={form.routeCode || ''} onChange={e => sf('routeCode', e.target.value.toUpperCase())}
+                style={{ ...s.input }} />
+            </div>
+            <Inp label='Route Name (optional — auto-filled from origin → dest if blank)'
+              value={form.name} onChange={v => sf('name', v)} placeholder='e.g. Samarinda → JMSE' />
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Inp label='Origin' value={form.origin} onChange={v => sf('origin', v)} />
             <Inp label='Destination' value={form.destination} onChange={v => sf('destination', v)} />

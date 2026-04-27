@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { T, s } from '../tokens';
 import { Hdr, Btn, Badge, Modal, Inp, Sel, SectionLabel, Divider } from '../components/UI';
 import { uid, idr0, DEFAULT_VESSEL_MAINTENANCE, calcMaintenanceAnnual } from '../utils';
+import * as XLSX from 'xlsx';
 
 const DEF_FORM = {
   name: '', imoNumber: '', builtYear: '', flag: 'Indonesia',
@@ -19,11 +20,91 @@ const DEF_FORM = {
 export default function Vessels({ db, updateDB }) {
   const [modal, setModal] = useState(null);
   const [form,  setForm]  = useState({});
+  const [importPreview, setImportPreview] = useState(null);
+  const importRef = useRef(null);
   const sf = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const vessels = db.vessels || [];
 
-  const openNew  = () => { setForm({ ...DEF_FORM, maintenancePlan: DEFAULT_VESSEL_MAINTENANCE.map(x=>({...x})) }); setModal('new'); };
+  const handleImportFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const wb = XLSX.read(ev.target.result, { type: 'array' });
+        const ws  = wb.Sheets['Vessels'];
+        const wm  = wb.Sheets['Maintenance Plan'];
+        if (!ws) { alert('❌ Sheet "Vessels" not found. Please use the official template.'); return; }
+
+        // Parse vessels — data starts at row 4 (index 3), headers at row 2
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        const vessels = [];
+        for (let i = 3; i < rows.length; i++) {
+          const r = rows[i];
+          if (!r[0]) continue; // skip empty rows
+          const v = {
+            id: uid(), type: 'vessel',
+            name:                r[0]  || '',
+            imoNumber:           r[1]  || '',
+            builtYear:           r[2]  || '',
+            flag:                r[3]  || 'Indonesia',
+            capacityKL:          +r[4] || 0,
+            engineType:          r[5]  || '',
+            consumptionLperHour: +r[6] || 0,
+            rpmCoefficients:     { low: +r[7]||0.75, standard: +r[8]||1.0, high: +r[9]||1.3 },
+            crewCount:           +r[10]|| 0,
+            crewMonthlyCost:     +r[11]|| 0,
+            crewPremiPerTrip:    +r[12]|| 0,
+            purchasePrice:       +r[13]|| 0,
+            residualValue:       +r[14]|| 0,
+            depreciationYears:   +r[15]|| 8,
+            insuranceAnnual:     +r[16]|| 0,
+            repairBufferPct:     +r[17]|| 1.5,
+            notes:               r[18] || '',
+            maintenancePlan:     DEFAULT_VESSEL_MAINTENANCE.map(x => ({ ...x })),
+          };
+          vessels.push(v);
+        }
+
+        // Parse maintenance plan and attach to vessels
+        if (wm) {
+          const mrows = XLSX.utils.sheet_to_json(wm, { header: 1, defval: '' });
+          for (let i = 2; i < mrows.length; i++) {
+            const r = mrows[i];
+            if (!r[0] || !r[1]) continue;
+            const vesselName = String(r[0]).trim();
+            const v = vessels.find(v => v.name === vesselName);
+            if (v) {
+              if (v.maintenancePlan.length === DEFAULT_VESSEL_MAINTENANCE.length &&
+                  v.maintenancePlan.every(p => p.costIDR === 0)) {
+                v.maintenancePlan = []; // clear defaults if user provided plan
+              }
+              v.maintenancePlan.push({
+                type:           String(r[1]).trim(),
+                intervalMonths: +r[2] || 12,
+                durationDays:   +r[3] || 1,
+                costIDR:        +r[4] || 0,
+              });
+            }
+          }
+        }
+
+        setImportPreview(vessels);
+      } catch(err) {
+        alert('❌ Could not parse file: ' + err.message);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = '';
+  };
+
+  const confirmImport = () => {
+    if (!importPreview) return;
+    updateDB(d => ({ ...d, vessels: [...d.vessels, ...importPreview] }));
+    setImportPreview(null);
+    alert(`✅ Imported ${importPreview.length} vessel${importPreview.length !== 1 ? 's' : ''} successfully.`);
+  };
   const openEdit = (v) => { setForm({ ...v }); setModal('edit'); };
   const del      = (id) => { if (!confirm('Delete vessel?')) return; updateDB(d => ({ ...d, vessels: d.vessels.filter(v => v.id !== id) })); };
 
@@ -69,10 +150,33 @@ export default function Vessels({ db, updateDB }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
         <Hdr>⛴ VESSELS — PT USI Petrotrans Samudra</Hdr>
-        <Btn onClick={openNew}>+ Add Vessel</Btn>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Btn variant='ghost' onClick={() => importRef.current?.click()}>↑ Import Excel</Btn>
+          <input ref={importRef} type='file' accept='.xlsx' onChange={handleImportFile} style={{ display:'none' }} />
+          <Btn onClick={openNew}>+ Add Vessel</Btn>
+        </div>
       </div>
+
+      {/* Import preview */}
+      {importPreview && (
+        <div style={{ ...s.card, borderColor: `${T.green}44`, background: '#0d1c14', marginBottom: 20 }}>
+          <div style={{ fontSize: 11, color: T.green, fontWeight: 700, marginBottom: 8 }}>
+            ⚠ Preview — {importPreview.length} vessel{importPreview.length !== 1 ? 's' : ''} found in file
+          </div>
+          <div style={{ fontSize: 11, color: T.textDim, marginBottom: 12 }}>
+            {importPreview.map(v => `${v.name} (${v.capacityKL} KL)`).join(' · ')}
+          </div>
+          <div style={{ fontSize: 10, color: T.red, marginBottom: 12 }}>
+            These will be added to existing vessels. Duplicates will not be removed automatically.
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Btn onClick={confirmImport} style={{ background: '#0d5a2a', borderColor: T.green }}>✓ Confirm Import</Btn>
+            <Btn variant='ghost' onClick={() => setImportPreview(null)}>Cancel</Btn>
+          </div>
+        </div>
+      )}
 
       {vessels.length === 0 && (
         <div style={{ color: T.textDim, textAlign: 'center', marginTop: 60, fontSize: 13 }}>

@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { T, s } from '../tokens';
 import { Hdr, Btn, Modal, Inp, Sel, SectionLabel } from '../components/UI';
+import * as XLSX from 'xlsx';
 import { uid, idr0, DEFAULT_TRUCK_MAINTENANCE, calcMaintenanceAnnual } from '../utils';
 
 const DEF_FORM = {
@@ -19,7 +20,74 @@ const DEF_FORM = {
 export default function Trucks({ db, updateDB }) {
   const [modal, setModal] = useState(null);
   const [form,  setForm]  = useState({});
+  const [importPreview, setImportPreview] = useState(null);
+  const importRef = useRef(null);
   const sf = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleImportFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const wb = XLSX.read(ev.target.result, { type: 'array' });
+        const ws = wb.Sheets['Trucks'];
+        const wm = wb.Sheets['Maintenance Plan'];
+        if (!ws) { alert('❌ Sheet "Trucks" not found. Please use the official template.'); return; }
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        const trucks = [];
+        for (let i = 3; i < rows.length; i++) {
+          const r = rows[i];
+          if (!r[0]) continue;
+          const t = {
+            id: uid(), type: 'truck',
+            licensePlate:       String(r[0]).trim().toUpperCase(),
+            brand:              r[1]  || '',
+            truckType:          r[2]  || '',
+            builtYear:          r[3]  || '',
+            capacityKL:         +r[4] || 0,
+            consumptionLperKm:  +r[5] || 0,
+            driverType:         String(r[6]).trim() === 'borongan' ? 'borongan' : 'fulltime',
+            driverMonthlyCost:  +r[7] || 0,
+            driverPremiPerTrip: +r[8] || 0,
+            purchasePrice:      +r[9] || 0,
+            residualValue:      +r[10]|| 0,
+            depreciationYears:  +r[11]|| 8,
+            insuranceAnnual:    +r[12]|| 0,
+            repairBufferPct:    +r[13]|| 1.5,
+            maintenancePlan:    DEFAULT_TRUCK_MAINTENANCE.map(x => ({ ...x })),
+          };
+          trucks.push(t);
+        }
+        if (wm) {
+          const mrows = XLSX.utils.sheet_to_json(wm, { header: 1, defval: '' });
+          for (let i = 2; i < mrows.length; i++) {
+            const r = mrows[i];
+            if (!r[0] || !r[1]) continue;
+            const plate = String(r[0]).trim().toUpperCase();
+            const t = trucks.find(t => t.licensePlate === plate);
+            if (t) {
+              if (t.maintenancePlan.every(p => p.costIDR === 0)) t.maintenancePlan = [];
+              t.maintenancePlan.push({
+                type: String(r[1]).trim(), intervalMonths: +r[2]||12,
+                durationDays: +r[3]||1, costIDR: +r[4]||0,
+              });
+            }
+          }
+        }
+        setImportPreview(trucks);
+      } catch(err) { alert('❌ Could not parse file: ' + err.message); }
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = '';
+  };
+
+  const confirmImport = () => {
+    if (!importPreview) return;
+    updateDB(d => ({ ...d, trucks: [...d.trucks, ...importPreview] }));
+    setImportPreview(null);
+    alert(`✅ Imported ${importPreview.length} truck${importPreview.length !== 1 ? 's' : ''} successfully.`);
+  };
 
   const trucks = db.trucks || [];
 
@@ -62,10 +130,28 @@ export default function Trucks({ db, updateDB }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
         <Hdr>🚛 TRUCKS — PT USI Petrotrans Energi</Hdr>
-        <Btn onClick={openNew}>+ Add Truck</Btn>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Btn variant='ghost' onClick={() => importRef.current?.click()}>↑ Import Excel</Btn>
+          <input ref={importRef} type='file' accept='.xlsx' onChange={handleImportFile} style={{ display:'none' }} />
+          <Btn onClick={openNew}>+ Add Truck</Btn>
+        </div>
       </div>
+      {importPreview && (
+        <div style={{ ...s.card, borderColor: `${T.green}44`, background: '#0d1c14', marginBottom: 20 }}>
+          <div style={{ fontSize: 11, color: T.green, fontWeight: 700, marginBottom: 8 }}>
+            ⚠ Preview — {importPreview.length} truck{importPreview.length !== 1 ? 's' : ''} found
+          </div>
+          <div style={{ fontSize: 11, color: T.textDim, marginBottom: 12 }}>
+            {importPreview.map(t => `${t.licensePlate} (${t.capacityKL} KL)`).join(' · ')}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Btn onClick={confirmImport} style={{ background: '#0d5a2a', borderColor: T.green }}>✓ Confirm Import</Btn>
+            <Btn variant='ghost' onClick={() => setImportPreview(null)}>Cancel</Btn>
+          </div>
+        </div>
+      )}
 
       {trucks.length === 0 && (
         <div style={{ color: T.textDim, textAlign: 'center', marginTop: 60, fontSize: 13 }}>
