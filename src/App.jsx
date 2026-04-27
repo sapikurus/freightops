@@ -47,15 +47,29 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
     let unsub = null;
+
     getDoc(DATA_DOC).then(snap => {
       if (!snap.exists()) {
+        // Brand new account — seed and set immediately
         setDoc(DATA_DOC, INIT_DB, { merge: true });
         setDB(INIT_DB);
+      } else {
+        // Existing data — set DB immediately from getDoc result
+        setDB(mergeDefaults(snap.data(), INIT_DB));
       }
+
+      // Attach live listener for real-time updates — never writes
       unsub = onSnapshot(DATA_DOC, s => {
         if (s.exists()) setDB(mergeDefaults(s.data(), INIT_DB));
+      }, err => {
+        console.error('Firestore snapshot error:', err);
       });
+    }).catch(err => {
+      console.error('Firestore getDoc error:', err);
+      // Fallback — set empty DB so app renders instead of hanging
+      setDB(INIT_DB);
     });
+
     return () => { if (unsub) unsub(); };
   }, [user]);
 
