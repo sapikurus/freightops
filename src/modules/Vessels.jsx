@@ -109,8 +109,6 @@ export default function Vessels({ db, updateDB }) {
   const openNew  = () => { setForm({ ...DEF_FORM, maintenancePlan: DEFAULT_VESSEL_MAINTENANCE.map(x=>({...x})) }); setModal('new'); };
   const openEdit = (v) => { setForm({ ...v }); setModal('edit'); };
   const del      = (id) => { if (!confirm('Delete vessel?')) return; updateDB(d => ({ ...d, vessels: d.vessels.filter(v => v.id !== id) })); };
-  const openEdit = (v) => { setForm({ ...v }); setModal('edit'); };
-  const del      = (id) => { if (!confirm('Delete vessel?')) return; updateDB(d => ({ ...d, vessels: d.vessels.filter(v => v.id !== id) })); };
 
   const save = () => {
     if (!form.name?.trim()) { alert('Vessel name required'); return; }
