@@ -33,10 +33,6 @@ const DEF_FORM = {
   targetTripsPerMonth: 60,
   maintenancePlan: DEFAULT_TRUCK_MAINTENANCE.map(x => ({ ...x })),
   notes: '',
-  // Financing mode
-  financingMode: 'depreciation',  // 'depreciation' | 'installment'
-  monthlyInstallment: '',         // angsuran/bulan incl asuransi+penyusutan
-  targetTripsPerMonth: 60,
 };
 
 export default function Trucks({ db, updateDB }) {

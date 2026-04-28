@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { T, s } from '../tokens';
 import { Hdr, Btn, Sel, Inp, SectionLabel, StatBox } from '../components/UI';
 import { calcOAT, idr0, idr2, uid, todayStr } from '../utils';
-import { getOverheadPerTrip, getPerizinanAnnual, getMaintenanceRates } from './MasterData';
 import { nextRouteCode } from './Routes';
 
 function Row({ label, value, color, bold, indent }) {
