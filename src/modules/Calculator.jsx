@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { T, s } from '../tokens';
 import { Hdr, Btn, Sel, Inp, SectionLabel, StatBox } from '../components/UI';
-import { calcOAT, idr0, idr2, uid, todayStr } from '../utils';
-import { nextRouteCode } from './Routes';
+import { calcOAT, idr0, uid, todayStr } from '../utils';
 
 function Row({ label, value, color, bold, indent }) {
   return (
@@ -159,28 +158,47 @@ export default function Calculator({ db, updateDB }) {
     <div>
       <Hdr>∑ OAT CALCULATOR</Hdr>
 
+      {/* ── Asset type — TAB CARDS (same as Master Data) ──────── */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+        {[
+          ['vessel', '⛴', 'PT USI Petrotrans Samudra', 'SEA FREIGHT',  vessels.length],
+          ['truck',  '🚛', 'PT USI Petrotrans Energi',  'LAND FREIGHT', trucks.length],
+        ].map(([k, icon, name, sub, count]) => (
+          <button key={k}
+            onClick={() => { setAssetType(k); setAssetId(''); setRouteId(''); setResult(null); }}
+            style={{
+              flex: 1, minWidth: 180, background: assetType === k ? T.amberGlow : T.card,
+              border: `2px solid ${assetType === k ? T.amber : T.border}`,
+              borderRadius: 8, padding: '14px 18px', cursor: 'pointer',
+              textAlign: 'left', transition: 'all .15s',
+            }}>
+            <div style={{ fontSize: 20, marginBottom: 4 }}>{icon}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, fontFamily: T.font, letterSpacing: 1,
+              color: assetType === k ? T.amber : T.text, marginBottom: 2 }}>
+              {k === 'vessel' ? 'VESSELS' : 'TRUCKS'}
+            </div>
+            <div style={{ fontSize: 10, color: assetType === k ? T.amber : T.text }}>{name}</div>
+            <div style={{ fontSize: 9, color: T.textDim, marginTop: 2, letterSpacing: 1 }}>
+              {sub} · {count} registered
+            </div>
+          </button>
+        ))}
+      </div>
+
       {/* Inputs */}
       <div style={{ ...s.card }}>
         <SectionLabel>SELECT ASSET & ROUTE</SectionLabel>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Sel label='Asset Type' value={assetType} onChange={v => { setAssetType(v); setAssetId(''); setRouteId(''); setResult(null); }}>
-            <option value='vessel'>⛴ Vessel (Sea)</option>
-            <option value='truck'>🚛 Truck (Land)</option>
-          </Sel>
-          <Sel label='Asset' value={assetId} onChange={v => { setAssetId(v); setResult(null); }}>
-            <option value=''>— Select {assetType} —</option>
-            {assets.map(a => <option key={a.id} value={a.id}>{a.name || a.licensePlate} ({a.capacityKL} KL)</option>)}
-          </Sel>
-          <Sel label={`Route (${isSea ? 'Sea' : 'Land'} only)`} value={assetId} onChange={v => { setAssetId(v); setResult(null); }}>
-            <option value=''>— Select {assetType} —</option>
+          <Sel label={isSea ? 'Vessel' : 'Truck'} value={assetId} onChange={v => { setAssetId(v); setResult(null); }}>
+            <option value=''>— Select {isSea ? 'vessel' : 'truck'} —</option>
             {assets.map(a => <option key={a.id} value={a.id}>{a.name || a.licensePlate} ({a.capacityKL} KL)</option>)}
           </Sel>
 
           {/* Route mode toggle */}
-          <div style={{ gridColumn: '1 / -1' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
             <label style={s.label}>ROUTE INPUT MODE</label>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-              {[['saved','📍 Use Saved Route'],['direct','✏️ Enter Directly']].map(([k,l]) => (
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[['saved','📍 Saved Route'],['direct','✏️ Enter Directly']].map(([k,l]) => (
                 <button key={k} onClick={() => { setRouteMode(k); setResult(null); }}
                   style={{ ...s.btn('ghost'), flex: 1,
                     borderColor: routeMode === k ? T.amber : T.border,
@@ -237,7 +255,13 @@ export default function Calculator({ db, updateDB }) {
                     ...directRoute,
                     type: isSea ? 'sea' : 'land',
                     id: Math.random().toString(36).slice(2,9)+Date.now().toString(36),
-                    routeCode: nextRouteCode(d.routes, isSea ? 'sea' : 'land'),
+                    routeCode: (() => {
+                      const prefix = isSea ? 'R-SEA-' : 'R-LT-';
+                      const existing = (d.routes||[]).filter(r=>r.routeCode?.startsWith(prefix))
+                        .map(r=>parseInt(r.routeCode.replace(prefix,''),10)).filter(n=>!isNaN(n));
+                      const next = existing.length ? Math.max(...existing)+1 : 1;
+                      return prefix + String(next).padStart(3,'0');
+                    })(),
                     name: name || `${directRoute.origin||'–'} → ${directRoute.destination||'–'}`,
                     origin: '', destination: '',
                   }]
@@ -261,7 +285,7 @@ export default function Calculator({ db, updateDB }) {
             <div style={{ gridColumn: '1 / -1', ...s.card, padding: '10px 14px', marginBottom: 0,
               background: T.bg, borderColor: T.teal + '44' }}>
               <div style={{ fontSize: 9, color: T.teal, letterSpacing: 1.5, marginBottom: 6 }}>
-                FROM MASTER DATA ({mdEntity.toUpperCase()})
+                FROM MASTER DATA ({mdCompany})
               </div>
               <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: 11 }}>
                 {mdOverheadAnnual > 0 && <span>Overhead: <strong style={{ color: T.teal }}>Rp {idr0(mdOverheadAnnual)}/yr</strong></span>}
