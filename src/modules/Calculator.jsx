@@ -79,13 +79,19 @@ export default function Calculator({ db, updateDB }) {
 
   const isSea = assetType === 'vessel';
 
-  // Pull from master data
-  const mdEntity          = isSea ? 'pts' : 'pte';
-  const tripsPerMonth     = +(asset?.targetTripsPerMonth || 60);
-  const mdOverheadPerTrip = getOverheadPerTrip(db.masterData, mdEntity, tripsPerMonth);
-  const mdOverheadAnnual  = Math.round(mdOverheadPerTrip * tripsPerMonth * 12);
-  const mdPerizinanAnnual = getPerizinanAnnual(db.masterData, mdEntity);
-  const mdRates           = getMaintenanceRates(db.masterData);
+  // Pull overhead/perizinan/rates directly from db (no stale helper functions needed)
+  const mdCompany = isSea ? 'PTS' : 'PTE';
+  const mdPool    = db.overheadPool?.[mdCompany];
+  const mdOverheadAnnual = mdPool
+    ? Math.round(
+        (mdPool.items || []).reduce((s, i) => s + (+i.amount || 0), 0)
+        / Math.max(1, mdPool.activeUnits || 1)
+        * 12
+      )
+    : 0;
+  const mdPerizinanAnnual = (db.perizinan?.[mdCompany] || [])
+    .reduce((s, p) => s + (+p.costIDR || 0) * (12 / (+p.intervalMonths || 12)), 0);
+  const mdRates = db.maintenanceRates?.[mdCompany] || { servicePerKm: 0, tirePerKm: 0 };
 
   const calculate = () => {
     if (!asset || !fuelPrice) {
