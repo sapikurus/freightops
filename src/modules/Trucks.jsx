@@ -22,7 +22,7 @@ const DEF_FORM = {
   licensePlate: '', brand: '', truckType: '', builtYear: '',
   purchasePrice: '', residualValue: '', depreciationYears: 8,
   capacityKL: '',
-  consumptionLperKm: '',
+  consumptionKmPerL: '',
   driverType: 'fulltime',
   driverMonthlyCost: '', driverPremiPerTrip: '',
   insuranceAnnual: '',
@@ -60,7 +60,7 @@ export default function Trucks({ db, updateDB }) {
             truckType:          r[2]  || '',
             builtYear:          r[3]  || '',
             capacityKL:         +r[4] || 0,
-            consumptionLperKm:  +r[5] || 0,
+            consumptionKmPerL:  +r[5] || 0,
             driverType:         String(r[6]).trim() === 'borongan' ? 'borongan' : 'fulltime',
             driverMonthlyCost:  +r[7] || 0,
             driverPremiPerTrip: +r[8] || 0,
@@ -117,7 +117,7 @@ export default function Trucks({ db, updateDB }) {
       residualValue: +form.residualValue || 0,
       depreciationYears: +form.depreciationYears || 8,
       capacityKL: +form.capacityKL || 0,
-      consumptionLperKm: +form.consumptionLperKm || 0,
+      consumptionKmPerL: +form.consumptionKmPerL || 0,
       driverMonthlyCost: +form.driverMonthlyCost || 0,
       driverPremiPerTrip: +form.driverPremiPerTrip || 0,
       insuranceAnnual: +form.insuranceAnnual || 0,
@@ -179,7 +179,7 @@ export default function Trucks({ db, updateDB }) {
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>
-                {['License Plate','Brand / Type','Built','Cap (KL)','Consumption','Driver','Purchase Price','Buffer %',''].map(h =>
+                {['License Plate','Brand / Type','Built','Cap (KL)','Consumption (km/L)','Driver','Purchase Price','Buffer %',''].map(h =>
                   <th key={h} style={s.th}>{h}</th>)}
               </tr></thead>
               <tbody>
@@ -189,7 +189,7 @@ export default function Trucks({ db, updateDB }) {
                     <td style={s.td}>{t.brand} {t.truckType}</td>
                     <td style={s.td}>{t.builtYear || '–'} <span style={{ color: T.textDim, fontSize: 10 }}>({assetAge(t.builtYear)})</span></td>
                     <td style={s.tdNum}>{idr0(t.capacityKL)} KL</td>
-                    <td style={s.tdNum}>{t.consumptionLperKm || '–'} L/km</td>
+                    <td style={s.tdNum}>{t.consumptionKmPerL || '–'} km/L</td>
                     <td style={s.td}>
                       <span style={{ fontSize: 10, color: t.driverType === 'borongan' ? T.amber : T.green }}>
                         {t.driverType === 'borongan' ? `Premi Rp ${idr0(t.driverPremiPerTrip)}/trip` : `Rp ${idr0(t.driverMonthlyCost)}/mo`}
@@ -224,7 +224,7 @@ export default function Trucks({ db, updateDB }) {
           <SectionLabel>CAPACITY & FUEL</SectionLabel>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Inp label='Cargo Capacity (KL)' type='number' value={form.capacityKL} onChange={v => sf('capacityKL', v)} />
-            <Inp label='Fuel Consumption (L/km)' type='number' step='0.01' value={form.consumptionLperKm} onChange={v => sf('consumptionLperKm', v)} />
+            <Inp label='Fuel Consumption (km/L)' type='number' step='0.1' value={form.consumptionKmPerL} onChange={v => sf('consumptionKmPerL', v)} />
           </div>
 
           <SectionLabel>DRIVER ARRANGEMENT</SectionLabel>

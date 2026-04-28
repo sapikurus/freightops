@@ -108,7 +108,7 @@ export function calcOAT(asset, route, params) {
     const sailHours        = voyageHours - (route.loadingHours || 0) - (route.unloadingHours || 0) - (route.portWaitingHours || 0);
     fuelCostPerTrip        = sailHours * (asset.consumptionLperHour || 0) * rpmCoeff * fuelPricePerLiter;
   } else {
-    fuelCostPerTrip = (route.distanceKm || 0) * 2 * (asset.consumptionLperKm || 0) * fuelPricePerLiter;
+    fuelCostPerTrip = (route.distanceKm || 0) * 2 / (asset.consumptionKmPerL || 1) * fuelPricePerLiter;
   }
 
   const premi = type === 'vessel'
