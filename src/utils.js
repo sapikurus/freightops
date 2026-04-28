@@ -48,7 +48,8 @@ export function calcOAT(asset, route, params) {
     fuelPricePerLiter,
     opDaysOffset    = 0,
     maintMultiplier = 1.0,
-    rpmKey          = 'standard',  // 'low' | 'standard' | 'high'
+    rpmKey          = 'standard',
+    overheadCost    = 0,       // lump sum IDR added to total annual fixed cost
   } = params;
 
   const type = asset.type; // 'vessel' | 'truck'
@@ -99,7 +100,7 @@ export function calcOAT(asset, route, params) {
   const maintCost       = Math.round(maintAnnual.cost * maintMultiplier);
   const repairBuffer    = Math.round(purchasePrice * (+(asset.repairBufferPct || 1.5) / 100));
 
-  const totalFixed = depreciation + salaryAnnual + insurance + maintCost + repairBuffer;
+  const totalFixed = depreciation + salaryAnnual + insurance + maintCost + repairBuffer + (+overheadCost || 0);
 
   // ── 6. Operating costs (per trip × trips) ────────────────────
   let fuelCostPerTrip;
@@ -141,6 +142,7 @@ export function calcOAT(asset, route, params) {
     insurance,
     maintCost,
     repairBuffer,
+    overheadCost:  +overheadCost || 0,
     totalFixed,
     // Operating breakdown
     fuelCostPerTrip,

@@ -48,8 +48,9 @@ export default function Calculator({ db, updateDB }) {
   const [assetId,   setAssetId]   = useState('');
   const [routeMode, setRouteMode] = useState('saved'); // 'saved' | 'direct'
   const [routeId,   setRouteId]   = useState('');
-  const [fuelPrice, setFuelPrice] = useState(db.settings?.bunkerPrice || '');
-  const [result,    setResult]    = useState(null);
+  const [fuelPrice,    setFuelPrice]    = useState(db.settings?.bunkerPrice || '');
+  const [overheadCost, setOverheadCost] = useState('');
+  const [result,       setResult]       = useState(null);
 
   // Direct route entry state
   const [directRoute, setDirectRoute] = useState({
@@ -94,30 +95,25 @@ export default function Calculator({ db, updateDB }) {
       opDaysOffset:    +opDaysOffset,
       maintMultiplier: +maintMultiplier,
       rpmKey,
+      overheadCost:    +overheadCost || 0,
     };
     setResult(calcOAT(asset, route, params));
   };
 
   // Scenario results
   const conservativeResult = asset && route && fuelPrice ? calcOAT(asset, route, {
-    fuelPricePerLiter: +fuelPrice,
-    opDaysOffset: -15,
-    maintMultiplier: 1.3,
-    rpmKey: 'standard',
+    fuelPricePerLiter: +fuelPrice, opDaysOffset: -15, maintMultiplier: 1.3,
+    rpmKey: 'standard', overheadCost: +overheadCost || 0,
   }) : null;
 
   const standardResult = asset && route && fuelPrice ? calcOAT(asset, route, {
-    fuelPricePerLiter: +fuelPrice,
-    opDaysOffset: 0,
-    maintMultiplier: 1.0,
-    rpmKey: 'standard',
+    fuelPricePerLiter: +fuelPrice, opDaysOffset: 0, maintMultiplier: 1.0,
+    rpmKey: 'standard', overheadCost: +overheadCost || 0,
   }) : null;
 
   const aggressiveResult = asset && route && fuelPrice ? calcOAT(asset, route, {
-    fuelPricePerLiter: +fuelPrice,
-    opDaysOffset: +15,
-    maintMultiplier: 0.8,
-    rpmKey: isSea ? 'high' : 'standard',
+    fuelPricePerLiter: +fuelPrice, opDaysOffset: +15, maintMultiplier: 0.8,
+    rpmKey: isSea ? 'high' : 'standard', overheadCost: +overheadCost || 0,
   }) : null;
 
   const saveCalc = () => {
@@ -231,6 +227,12 @@ export default function Calculator({ db, updateDB }) {
           )}
           <Inp label={isSea ? 'Bunker Price (IDR/Liter)' : 'Diesel Price (IDR/Liter)'}
             type='number' value={fuelPrice} onChange={v => { setFuelPrice(v); setResult(null); }} />
+          <div style={{ gridColumn: '1 / -1' }}>
+            <Inp label='Overhead / Additional Cost (IDR/year — lump sum, optional)'
+              type='number' value={overheadCost}
+              onChange={v => { setOverheadCost(v); setResult(null); }}
+              placeholder='e.g. office allocation, management fee, etc.' />
+          </div>
         </div>
 
         {/* Scenario sliders */}
@@ -303,6 +305,10 @@ export default function Calculator({ db, updateDB }) {
               <Row label='Insurance' value={`Rp ${idr0(result.insurance)}`} indent />
               <Row label='Maintenance Reserve' value={`Rp ${idr0(result.maintCost)}`} indent />
               <Row label='Repair Buffer' value={`Rp ${idr0(result.repairBuffer)}`} indent />
+              {result.overheadCost > 0 && (
+                <Row label='Overhead / Additional Cost' value={`Rp ${idr0(result.overheadCost)}`}
+                  indent color={T.teal} />
+              )}
               <Row label='TOTAL FIXED' value={`Rp ${idr0(result.totalFixed)}`} bold color={T.amber} />
             </div>
           </div>
