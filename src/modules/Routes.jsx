@@ -26,7 +26,7 @@ const DEF_LAND = {
   type: 'land', name: '', origin: '', destination: '',
   distanceKm: '',
   loadingHours: 2, unloadingHours: 2, restHours: 0,
-  tollFees: '', informalFees: '', otherFees: '',
+  tollFees: '', portalFees: '', otherFees: '',
   notes: '',
 };
 
@@ -53,7 +53,7 @@ export default function Routes({ db, updateDB }) {
     const isEdit = modal === 'edit';
     const numFields = form.type === 'sea'
       ? ['distanceNM','speedKnots','loadingHours','unloadingHours','portWaitingHours','portFeeOrigin','portFeeDestination','otherFees']
-      : ['distanceKm','loadingHours','unloadingHours','restHours','tollFees','informalFees','otherFees'];
+      : ['distanceKm','loadingHours','unloadingHours','restHours','tollFees','portalFees','otherFees'];
     const record = { ...form };
     // Auto-fill name if blank
     if (!record.name?.trim() && record.origin && record.destination) {
@@ -116,7 +116,7 @@ export default function Routes({ db, updateDB }) {
                     (isSea ? (+r.portWaitingHours || 0) : (+r.restHours || 0));
                   const fees = isSea
                     ? (+r.portFeeOrigin || 0) + (+r.portFeeDestination || 0) + (+r.otherFees || 0)
-                    : (+r.tollFees || 0) + (+r.informalFees || 0) + (+r.otherFees || 0);
+                    : (+r.tollFees || 0) + (+r.portalFees || 0) + (+r.otherFees || 0);
                   return (
                     <tr key={r.id}>
                       <td style={{ ...s.td }}>
@@ -193,7 +193,7 @@ export default function Routes({ db, updateDB }) {
             <SectionLabel>PER-TRIP FEES</SectionLabel>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Inp label='Toll Fees (IDR/trip)' type='number' value={form.tollFees} onChange={v => sf('tollFees', v)} />
-              <Inp label='Informal Route Fees / Uang Jalan (IDR/trip)' type='number' value={form.informalFees} onChange={v => sf('informalFees', v)} />
+              <Inp label='Portal Fees (Uang Jalan) (IDR/trip)' type='number' value={form.portalFees} onChange={v => sf('portalFees', v)} />
               <Inp label='Other Fees (IDR/trip)' type='number' value={form.otherFees} onChange={v => sf('otherFees', v)} />
             </div>
           </>}

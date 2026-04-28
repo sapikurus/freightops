@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
-import { T, s } from '../tokens';
+import { T as DARK, makeStyles } from '../tokens';
+import { useTheme } from '../App';
 import { Hdr, Btn, Modal, Inp, Sel, SectionLabel } from '../components/UI';
 import * as XLSX from 'xlsx';
 import { uid, idr0, DEFAULT_TRUCK_MAINTENANCE, calcMaintenanceAnnual } from '../utils';
@@ -27,11 +28,19 @@ const DEF_FORM = {
   driverMonthlyCost: '', driverPremiPerTrip: '',
   insuranceAnnual: '',
   repairBufferPct: 1.5,
+  financingMode: 'depreciation',
+  monthlyInstallment: '',
+  targetTripsPerMonth: 60,
   maintenancePlan: DEFAULT_TRUCK_MAINTENANCE.map(x => ({ ...x })),
   notes: '',
+  // Financing mode
+  financingMode: 'depreciation',  // 'depreciation' | 'installment'
+  monthlyInstallment: '',         // angsuran/bulan incl asuransi+penyusutan
+  targetTripsPerMonth: 60,
 };
 
 export default function Trucks({ db, updateDB }) {
+  const { T, s } = useTheme();
   const [modal, setModal] = useState(null);
   const [form,  setForm]  = useState({});
   const [importPreview, setImportPreview] = useState(null);
@@ -122,6 +131,9 @@ export default function Trucks({ db, updateDB }) {
       driverPremiPerTrip: +form.driverPremiPerTrip || 0,
       insuranceAnnual: +form.insuranceAnnual || 0,
       repairBufferPct: +form.repairBufferPct || 1.5,
+      financingMode: form.financingMode || 'depreciation',
+      monthlyInstallment: +form.monthlyInstallment || 0,
+      targetTripsPerMonth: +form.targetTripsPerMonth || 60,
     };
     if (!isEdit) record.id = uid();
     updateDB(d => ({
@@ -237,14 +249,54 @@ export default function Trucks({ db, updateDB }) {
             : <Inp label='Premi per Trip (IDR)' type='number' value={form.driverPremiPerTrip} onChange={v => sf('driverPremiPerTrip', v)} />
           }
 
-          <SectionLabel>FINANCIALS</SectionLabel>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            <Inp label='Purchase Price (IDR)' type='number' value={form.purchasePrice} onChange={v => sf('purchasePrice', v)} />
-            <Inp label='Residual Value (IDR)' type='number' value={form.residualValue} onChange={v => sf('residualValue', v)} />
-            <Inp label='Depreciation Years' type='number' value={form.depreciationYears} onChange={v => sf('depreciationYears', v)} />
-            <Inp label='Insurance Annual (IDR)' type='number' value={form.insuranceAnnual} onChange={v => sf('insuranceAnnual', v)} />
-            <Inp label='Repair Buffer %' type='number' step='0.1' value={form.repairBufferPct} onChange={v => sf('repairBufferPct', v)} />
+          <SectionLabel>FINANCIALS & FINANCING MODE</SectionLabel>
+          {/* Financing mode toggle */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            {[['depreciation','📊 Depreciation Model'],['installment','🏦 BEP / Installment Mode']].map(([k,l]) => (
+              <button key={k} onClick={() => sf('financingMode', k)}
+                style={{ flex: 1, ...s.btn('ghost'), padding: '10px 12px',
+                  borderColor: form.financingMode === k ? T.amber : T.border,
+                  color:       form.financingMode === k ? T.amber : T.textDim,
+                  textAlign: 'left' }}>
+                <div style={{ fontWeight: 700, marginBottom: 2 }}>{l}</div>
+                <div style={{ fontSize: 9, color: T.textDim }}>
+                  {k === 'depreciation'
+                    ? 'Calculate from purchase price, residual value, interest'
+                    : 'Enter actual monthly bank installment (incl. insurance + depreciation)'}
+                </div>
+              </button>
+            ))}
           </div>
+
+          {form.financingMode === 'installment' ? (
+            <div style={{ ...s.card, background: T.bg, marginBottom: 16 }}>
+              <div style={{ fontSize: 10, color: T.amber, marginBottom: 12 }}>
+                BEP MODE — Enter the actual monthly installment from bank (Angsuran/bulan incl. asuransi + penyusutan)
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                <Inp label='Monthly Installment / Angsuran (IDR)' type='number'
+                  value={form.monthlyInstallment} onChange={v => sf('monthlyInstallment', v)} />
+                <Inp label='Target Trips / Month' type='number'
+                  value={form.targetTripsPerMonth} onChange={v => sf('targetTripsPerMonth', v)} />
+                <div style={{ ...s.card, padding: '10px 12px', marginBottom: 0 }}>
+                  <div style={{ fontSize: 9, color: T.textDim, marginBottom: 4 }}>INSTALLMENT / RIT</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: T.amber, fontFamily: T.font }}>
+                    {form.monthlyInstallment && form.targetTripsPerMonth
+                      ? `Rp ${idr0(+form.monthlyInstallment / +form.targetTripsPerMonth)}`
+                      : '–'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+              <Inp label='Purchase Price (IDR)' type='number' value={form.purchasePrice} onChange={v => sf('purchasePrice', v)} />
+              <Inp label='Residual Value (IDR)' type='number' value={form.residualValue} onChange={v => sf('residualValue', v)} />
+              <Inp label='Depreciation Years' type='number' value={form.depreciationYears} onChange={v => sf('depreciationYears', v)} />
+              <Inp label='Insurance Annual (IDR)' type='number' value={form.insuranceAnnual} onChange={v => sf('insuranceAnnual', v)} />
+              <Inp label='Repair Buffer %' type='number' step='0.1' value={form.repairBufferPct} onChange={v => sf('repairBufferPct', v)} />
+            </div>
+          )}
 
           <SectionLabel>MAINTENANCE PLAN</SectionLabel>
           <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}>

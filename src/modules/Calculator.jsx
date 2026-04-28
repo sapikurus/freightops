@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { T, s } from '../tokens';
 import { Hdr, Btn, Sel, Inp, SectionLabel, StatBox } from '../components/UI';
 import { calcOAT, idr0, idr2, uid, todayStr } from '../utils';
+import { getOverheadPerTrip, getPerizinanAnnual, getMaintenanceRates } from './MasterData';
 import { nextRouteCode } from './Routes';
 
 function Row({ label, value, color, bold, indent }) {
@@ -79,6 +80,14 @@ export default function Calculator({ db, updateDB }) {
 
   const isSea = assetType === 'vessel';
 
+  // Pull from master data
+  const mdEntity          = isSea ? 'pts' : 'pte';
+  const tripsPerMonth     = +(asset?.targetTripsPerMonth || 60);
+  const mdOverheadPerTrip = getOverheadPerTrip(db.masterData, mdEntity, tripsPerMonth);
+  const mdOverheadAnnual  = Math.round(mdOverheadPerTrip * tripsPerMonth * 12);
+  const mdPerizinanAnnual = getPerizinanAnnual(db.masterData, mdEntity);
+  const mdRates           = getMaintenanceRates(db.masterData);
+
   const calculate = () => {
     if (!asset || !fuelPrice) {
       alert('Please select an asset and enter fuel/bunker price'); return;
@@ -95,26 +104,34 @@ export default function Calculator({ db, updateDB }) {
       opDaysOffset:    +opDaysOffset,
       maintMultiplier: +maintMultiplier,
       rpmKey,
-      overheadCost:    +overheadCost || 0,
+      overheadCost:    mdOverheadAnnual + (+overheadCost || 0),
+      perizinanCost:   mdPerizinanAnnual,
+      servicePerKm:    mdRates.servicePerKm,
+      tirePerKm:       mdRates.tirePerKm,
     };
-    setResult(calcOAT(asset, route, params));
+    setResult(calcOAT(asset, route, params, db));
   };
 
   // Scenario results
+  const scenarioBase = {
+    fuelPricePerLiter: +fuelPrice,
+    overheadCost:    mdOverheadAnnual + (+overheadCost || 0),
+    perizinanCost:   mdPerizinanAnnual,
+    servicePerKm:    mdRates.servicePerKm,
+    tirePerKm:       mdRates.tirePerKm,
+  };
+
   const conservativeResult = asset && route && fuelPrice ? calcOAT(asset, route, {
-    fuelPricePerLiter: +fuelPrice, opDaysOffset: -15, maintMultiplier: 1.3,
-    rpmKey: 'standard', overheadCost: +overheadCost || 0,
-  }) : null;
+    ...scenarioBase, opDaysOffset: -15, maintMultiplier: 1.3, rpmKey: 'standard',
+  }, db) : null;
 
   const standardResult = asset && route && fuelPrice ? calcOAT(asset, route, {
-    fuelPricePerLiter: +fuelPrice, opDaysOffset: 0, maintMultiplier: 1.0,
-    rpmKey: 'standard', overheadCost: +overheadCost || 0,
-  }) : null;
+    ...scenarioBase, opDaysOffset: 0, maintMultiplier: 1.0, rpmKey: 'standard',
+  }, db) : null;
 
   const aggressiveResult = asset && route && fuelPrice ? calcOAT(asset, route, {
-    fuelPricePerLiter: +fuelPrice, opDaysOffset: +15, maintMultiplier: 0.8,
-    rpmKey: isSea ? 'high' : 'standard', overheadCost: +overheadCost || 0,
-  }) : null;
+    ...scenarioBase, opDaysOffset: +15, maintMultiplier: 0.8, rpmKey: isSea ? 'high' : 'standard',
+  }, db) : null;
 
   const saveCalc = () => {
     if (!result) return;
@@ -227,12 +244,28 @@ export default function Calculator({ db, updateDB }) {
           )}
           <Inp label={isSea ? 'Bunker Price (IDR/Liter)' : 'Diesel Price (IDR/Liter)'}
             type='number' value={fuelPrice} onChange={v => { setFuelPrice(v); setResult(null); }} />
-          <div style={{ gridColumn: '1 / -1' }}>
-            <Inp label='Overhead / Additional Cost (IDR/year — lump sum, optional)'
+        <div style={{ gridColumn: '1 / -1' }}>
+            <Inp label='Overhead / Additional Cost (IDR/year — manual lump sum, added on top of master data overhead)'
               type='number' value={overheadCost}
               onChange={v => { setOverheadCost(v); setResult(null); }}
-              placeholder='e.g. office allocation, management fee, etc.' />
+              placeholder='e.g. additional allocation not in master data' />
           </div>
+
+          {/* Master data summary */}
+          {(mdOverheadAnnual > 0 || mdPerizinanAnnual > 0 || mdRates.servicePerKm > 0) && (
+            <div style={{ gridColumn: '1 / -1', ...s.card, padding: '10px 14px', marginBottom: 0,
+              background: T.bg, borderColor: T.teal + '44' }}>
+              <div style={{ fontSize: 9, color: T.teal, letterSpacing: 1.5, marginBottom: 6 }}>
+                FROM MASTER DATA ({mdEntity.toUpperCase()})
+              </div>
+              <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: 11 }}>
+                {mdOverheadAnnual > 0 && <span>Overhead: <strong style={{ color: T.teal }}>Rp {idr0(mdOverheadAnnual)}/yr</strong></span>}
+                {mdPerizinanAnnual > 0 && <span>Perizinan: <strong style={{ color: T.teal }}>Rp {idr0(mdPerizinanAnnual)}/yr</strong></span>}
+                {mdRates.servicePerKm > 0 && <span>Service: <strong style={{ color: T.teal }}>Rp {idr0(mdRates.servicePerKm)}/km</strong></span>}
+                {mdRates.tirePerKm > 0 && <span>Tire: <strong style={{ color: T.teal }}>Rp {idr0(mdRates.tirePerKm)}/km</strong></span>}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Scenario sliders */}
@@ -305,9 +338,15 @@ export default function Calculator({ db, updateDB }) {
               <Row label='Insurance' value={`Rp ${idr0(result.insurance)}`} indent />
               <Row label='Maintenance Reserve' value={`Rp ${idr0(result.maintCost)}`} indent />
               <Row label='Repair Buffer' value={`Rp ${idr0(result.repairBuffer)}`} indent />
+              {result.useInstallment && (
+                <Row label='Monthly Installment × 12 (BEP mode)'
+                  value={`Rp ${idr0(result.installmentAnnual)}`} indent color={T.blue} />
+              )}
+              {result.perizinanCost > 0 && (
+                <Row label='Perizinan (from Master Data)' value={`Rp ${idr0(result.perizinanCost)}`} indent color={T.teal} />
+              )}
               {result.overheadCost > 0 && (
-                <Row label='Overhead / Additional Cost' value={`Rp ${idr0(result.overheadCost)}`}
-                  indent color={T.teal} />
+                <Row label='Overhead (Master Data + Manual)' value={`Rp ${idr0(result.overheadCost)}`} indent color={T.teal} />
               )}
               <Row label='TOTAL FIXED' value={`Rp ${idr0(result.totalFixed)}`} bold color={T.amber} />
             </div>
@@ -320,7 +359,10 @@ export default function Calculator({ db, updateDB }) {
               <Row label='Fuel / Bunker per trip' value={`Rp ${idr0(result.fuelCostPerTrip)}`} indent />
               <Row label='Crew / Driver Premi' value={`Rp ${idr0(result.premi)}`} indent />
               <Row label={isSea ? 'Port Fees' : 'Toll Fees'} value={`Rp ${idr0(result.portOrToll)}`} indent />
-              <Row label='Informal Route Fees' value={`Rp ${idr0(result.informalFees)}`} indent />
+              <Row label='Portal Fees / Uang Jalan' value={`Rp ${idr0(result.portalFees)}`} indent />
+              {result.maintPerTripKm > 0 && (
+                <Row label='Maintenance / km (service + tire)' value={`Rp ${idr0(result.maintPerTripKm)}`} indent color={T.teal} />
+              )}
               <Row label='Other Fees' value={`Rp ${idr0(result.otherFees)}`} indent />
               <Row label='Per Trip Subtotal' value={`Rp ${idr0(result.opPerTrip)}`} bold />
               <Row label='TOTAL OPERATING' value={`Rp ${idr0(result.totalOperating)}`} bold color={T.blue} />

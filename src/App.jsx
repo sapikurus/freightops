@@ -10,6 +10,7 @@ import Vessels from './modules/Vessels';
 import Trucks from './modules/Trucks';
 import Routes from './modules/Routes';
 import Calculator from './modules/Calculator';
+import MasterDataModule from './modules/MasterDataModule';
 
 // ── Theme context ─────────────────────────────────────────────
 export const ThemeCtx = createContext({ T: DARK, s: makeStyles(DARK), isDark: true, toggle: () => {} });
@@ -109,6 +110,7 @@ export default function App() {
     { k: 'trucks',     icon: '🚛', label: 'TRUCKS' },
     { k: 'routes',     icon: '📍', label: 'ROUTES' },
     { k: 'calculator', icon: '∑',  label: 'CALCULATOR' },
+    { k: 'masterdata', icon: '📊',  label: 'MASTER DATA' },
   ];
 
   const mobile = isMobile();
@@ -286,6 +288,7 @@ export default function App() {
             {tab === 'trucks'     && <Trucks     db={db} updateDB={updateDB} />}
             {tab === 'routes'     && <Routes     db={db} updateDB={updateDB} />}
             {tab === 'calculator' && <Calculator db={db} updateDB={updateDB} />}
+            {tab === 'masterdata' && <MasterDataModule db={db} updateDB={updateDB} />}
           </div>
         </main>
       </div>
