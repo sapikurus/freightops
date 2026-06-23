@@ -226,10 +226,11 @@ export function calcOAT(asset, route, params, masterData) {
 
 // ── INIT_DB ───────────────────────────────────────────────────
 export const INIT_DB = {
-  vessels:      [],
-  trucks:       [],
-  routes:       [],
-  calculations: [],
+  vessels:        [],
+  trucks:         [],
+  routes:         [],
+  calculations:   [],
+  deliveryOrders: [],
   settings:     { bunkerPrice: 0, dieselPrice: 0 },
   // Master data
   overheadPool: {
