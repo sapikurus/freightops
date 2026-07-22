@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTheme } from '../App';
-import { Hdr, Btn, Inp, Sel, SectionLabel, Modal } from '../components/UI';
+import { Hdr, Btn, Inp, Sel, SectionLabel, Modal, Notice, Empty } from '../components/UI';
 import { uid, todayStr } from '../utils';
 import { USI_LOGO_B64 } from '../logoData';
 
@@ -439,10 +439,9 @@ export default function DeliveryOrder({ db, updateDB }) {
 
           {/* Preview of terbilang */}
           {form.qtyOrder && +form.qtyOrder > 0 && (
-            <div style={{ fontSize: 11, color: T.textDim, background: T.bg,
-              borderRadius: 4, padding: '8px 12px', marginBottom: 12 }}>
+            <Notice tone='info' style={{ marginBottom: 12 }}>
               Terbilang: <strong style={{ color: T.amber }}>{terbilang(+form.qtyOrder)} Liter</strong>
-            </div>
+            </Notice>
           )}
 
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
