@@ -1,3 +1,4 @@
+import { Children, cloneElement, isValidElement } from 'react';
 import { useTheme } from '../App';
 
 export function Hdr({ children, sub }) {
@@ -55,12 +56,22 @@ export function Inp({ label, value, onChange, type = 'text', placeholder,
 
 export function Sel({ label, value, onChange, children, style = {}, hint, disabled }) {
   const { T, s } = useTheme();
+  // Native <option> elements do not inherit the parent's styles — the popup list
+  // is drawn by the OS widget and falls back to the browser default (often dark).
+  // Injecting explicit colors onto each option keeps the open list on-theme.
+  const optionStyle = { background: T.inputBg, color: T.text };
+  const styledChildren = Children.map(children, child =>
+    isValidElement(child) && child.type === 'option'
+      ? cloneElement(child, { style: { ...optionStyle, ...(child.props.style || {}) } })
+      : child
+  );
   return (
     <div>
       {label && <label style={s.label}>{label.toUpperCase()}</label>}
       <select value={value ?? ''} onChange={e => onChange(e.target.value)} disabled={disabled}
-        style={{ ...s.input, opacity: disabled ? 0.5 : 1, ...style }}>
-        {children}
+        style={{ ...s.input, colorScheme: T.isDark ? 'dark' : 'light',
+          opacity: disabled ? 0.5 : 1, ...style }}>
+        {styledChildren}
       </select>
       {hint && (
         <div style={{ fontSize: 9, color: T.textDim, marginTop: -8, marginBottom: 10 }}>

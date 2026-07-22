@@ -73,12 +73,12 @@ function StatTile({ label, value, color, last }) {
 
 export default function MasterDataModule({ db, updateDB }) {
   const { T, s } = useTheme();
-  const [company, setCompany] = useState('PTE');
+  const [company, setCompany] = useState('PTS');
   const [section, setSection] = useState('overhead');
 
   const companies = [
-    ['PTE', '🚛', 'PT USI Petrotrans Energi',  'LAND FREIGHT'],
     ['PTS', '⛴',  'PT USI Petrotrans Samudra', 'SEA FREIGHT'],
+    ['PTE', '🚛', 'PT USI Petrotrans Energi',  'LAND FREIGHT'],
   ];
 
   // Sections differ by company:
